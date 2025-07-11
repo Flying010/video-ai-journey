@@ -1,7 +1,7 @@
 import torch
 from torch.nn import nn
 from torch.nn import functional as F
-from attention import SelfAttention, CrossAttention
+from sd.attention import SelfAttention, CrossAttention
 
 class TimeEmbedding(nn.Module):
 
@@ -67,7 +67,7 @@ class UNET_ResidualBlock(nn.Module):
 
         return merged + self.residual_layer(residue)
 
-class UNET_AttentionBlock(nn.Module):
+class UNET_AttentionBlock(nn.Module): #similar to transformer architecture's
 
     def __init__(self, n_head: int, n_embd: int, d_context=768):
         super().__init__()
