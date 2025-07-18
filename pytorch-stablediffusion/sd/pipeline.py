@@ -1,7 +1,7 @@
 import torch
 import numpy as np
 from tqdm import tqdm
-from ddpm import DDPMSampler
+from sampler import Sampler
 
 WIDTH = 512 #stable diffusion only takes in this dimension
 HEIGHT = 512
@@ -21,7 +21,8 @@ def generate(prompt: str,
             seed=None, 
             device=None,
             idle_device=None,
-            tokenizer=None):
+            tokenizer=None,
+            eta = 0.0):
     with torch.no_grad():
         if not (0 < strength <= 1):
             raise ValueError("strength must be between 0 and 1")
@@ -67,8 +68,8 @@ def generate(prompt: str,
             context = clip(tokens)
         to_idle(clip) #very useful if you have a limited gpu and want to offload to cpu
 
-        if sampler_name == "ddpm":
-            sampler = DDPMSampler(generator)
+        if sampler_name in ["ddpm", "ddim"]:
+            sampler = Sampler(generator)
             sampler.set_inference_timesteps(n_inference_steps)
         else:
             raise ValueError(f"Unknown sampler name")
@@ -129,7 +130,12 @@ def generate(prompt: str,
 
             # how to remove the noise from image? using the scheduler
             #Remove noise predicted by the UNET
-            latents = sampler.step(timestep, latents, model_output)
+            if sampler.sampler_name == "ddpm":
+                latents = sampler.ddpm_step(timestep, latents, model_output)
+            elif sampler.sampler_name == "ddim":
+                latents = sampler.ddim_step(timestep, latents, model_output, eta=eta)
+            else:
+                raise ValueError(f"Unknown sampler name {sampler.sampler_name}")
         
         to_idle(diffusion)
 
