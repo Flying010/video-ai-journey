@@ -1,7 +1,7 @@
 import torch
 import numpy as np
 
-class DDPMSampler:
+class Sampler:
 
     def __init__(self, generator: torch.Generator, num_training_steps=1000, beta_start: float = 0.00085, beta_end: float=0.0120):
         #beta is a series of numbers that indicates the variance of the noise that we add with each of these steps
@@ -49,7 +49,7 @@ class DDPMSampler:
         self.timesteps = self.timesteps[start_step:]
         self.start_step = start_step
 
-    def step(self, timestep: int, latents: torch.Tensor, model_output: torch.Tensor):
+    def ddpm_step(self, timestep: int, latents: torch.Tensor, model_output: torch.Tensor):
         t = timestep
         prev_t = self._get_previous_timestep(t)
 
@@ -80,6 +80,31 @@ class DDPMSampler:
         # X = mu + sigma * Z where Z ~ N(0, 1)
         pred_prev_sample = pred_prev_sample + variance
         return pred_prev_sample
+    
+    def ddim_step(self, timestep: int, latents: torch.Tensor, model_output: torch.Tensor, eta=0.0):
+        t = timestep
+        prev_t = self._get_previous_timestep(t)
+        
+        alpha_t = self.alphas_cumprod[t]
+        alpha_prev = self.alphas_cumprod[prev_t] if prev_t >= 0 else torch.tensor(1.0, device=latents.device, dtype=latents.dtype)
+        
+        # Predicted original clean sample x_0
+        pred_original_sample = (latents - torch.sqrt(1 - alpha_t) * model_output) / torch.sqrt(alpha_t)
+        
+        # Direction pointing to x_t
+        #dir_xt = torch.sqrt(1 - alpha_prev - (eta ** 2) * ((1 - alpha_prev) / (1 - alpha_t)) * (1 - alpha_t / alpha_prev)) * model_output
+        
+        # Noise term
+        noise = torch.randn_like(latents) if eta > 0 else torch.zeros_like(latents)
+        
+        sigma_t = eta * torch.sqrt((1 - alpha_prev) / (1 - alpha_t)) * torch.sqrt(1 - alpha_t / alpha_prev)
+        
+        # Compute previous latent x_{t-1}
+        #prev_latent = torch.sqrt(alpha_prev) * pred_original_sample + dir_xt + sigma_t * noise
+        prev_latent = torch.sqrt(alpha_prev) * pred_original_sample + torch.sqrt(1 - alpha_prev - sigma_t ** 2) * model_output + sigma_t * noise
+
+        
+        return prev_latent
 
 
     def add_noise(self, original_samples: torch.FloatTensor, timesteps: torch.IntTensor) -> torch.FloatTensor:
@@ -98,5 +123,5 @@ class DDPMSampler:
         
         # According to the euation (4) of the DDM paper
         noise = torch.randn(original_samples.shape, generator=self.generator, device=original_samples.device, dtype=original_samples.dtype)
-        noisy_samples = (sqrt_alpha_prod * original_samples) * (sqrt_one_minus_alpha_prod) * noise
+        noisy_samples = (sqrt_alpha_prod * original_samples) + (sqrt_one_minus_alpha_prod) * noise
     

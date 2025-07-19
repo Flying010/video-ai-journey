@@ -130,12 +130,12 @@ def generate(prompt: str,
 
             # how to remove the noise from image? using the scheduler
             #Remove noise predicted by the UNET
-            if sampler.sampler_name == "ddpm":
+            if sampler_name == "ddpm":
                 latents = sampler.ddpm_step(timestep, latents, model_output)
-            elif sampler.sampler_name == "ddim":
+            elif sampler_name == "ddim":
                 latents = sampler.ddim_step(timestep, latents, model_output, eta=eta)
             else:
-                raise ValueError(f"Unknown sampler name {sampler.sampler_name}")
+                raise ValueError(f"Unknown sampler name {sampler_name}")
         
         to_idle(diffusion)
 
