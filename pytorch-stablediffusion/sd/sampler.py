@@ -105,6 +105,80 @@ class Sampler:
 
         
         return prev_latent
+    
+    def euler_ancestral_step(model, x_t, t, t_next, sigma_t, sigma_next, model_output, eta=1.0):
+        """
+        Performs one Euler ancestral step.
+        
+        Args:
+            model: The denoising model (not used here directly if output already computed).
+            x_t: Current noisy sample at timestep t.
+            t: Current timestep.
+            t_next: Next timestep (smaller).
+            sigma_t: Standard deviation at timestep t.
+            sigma_next: Standard deviation at timestep t_next.
+            model_output: The predicted noise (usually model(x_t, t)).
+            eta: Controls stochasticity. 0.0 = deterministic, 1.0 = fully stochastic.
+
+        Returns:
+            x_{t_next}: The denoised latent at timestep t_next.
+        """
+        # Predict x0 (denoised image)
+        x0_pred = x_t - sigma_t * model_output
+
+        # Compute step size
+        dt = sigma_next - sigma_t
+
+        # Deterministic part
+        x_det = x_t + dt * model_output
+
+        # Stochastic part
+        if eta > 0.0:
+            noise = torch.randn_like(x_t)
+            sigma = (eta * (sigma_next**2 - sigma_t**2))**0.5
+            x_det += sigma * noise
+
+        return x_det
+    
+    def dpm_solver_pp_2m_step(x_t: torch.Tensor, t: float, t_prev: float, model_output_t: torch.Tensor,
+                                model_output_prev: torch.Tensor,
+                                alpha_t: float,
+                                alpha_prev: float,
+                                sigma_t: float,
+                                sigma_prev: float, ):
+            """
+            One DPM-Solver++(2M) step.
+
+            Args:
+                x_t:          Current latent (x_t).
+                t:            Current timestep (continuous).
+                t_prev:       Previous timestep.
+                model_output_t:     Model output (ε_theta) at time t.
+                model_output_prev:  Model output (ε_theta) at previous time t_prev.
+                alpha_t:      Alpha (mean scale) at timestep t.
+                alpha_prev:   Alpha (mean scale) at timestep t_prev.
+                sigma_t:      Sigma (noise std) at timestep t.
+                sigma_prev:   Sigma (noise std) at timestep t_prev.
+
+            Returns:
+                x_{t_prev}: Estimated latent at timestep t_prev.
+            """
+
+            # h is time difference
+            h = t_prev - t
+
+            # Compute predicted x0 from current and previous timesteps
+            x0_t = (x_t - sigma_t * model_output_t) / alpha_t
+            x0_prev = (x_t - sigma_t * model_output_prev) / alpha_t
+
+            # Linear multistep extrapolation of x0 (2nd-order)
+            x0_hat = x0_t + 0.5 * h * (model_output_t - model_output_prev)
+
+            # Now compute x_{t_prev}
+            x_prev = alpha_prev * x0_hat + sigma_prev * model_output_prev
+            return x_prev
+
+
 
 
     def add_noise(self, original_samples: torch.FloatTensor, timesteps: torch.IntTensor) -> torch.FloatTensor:
