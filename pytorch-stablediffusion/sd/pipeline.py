@@ -68,7 +68,7 @@ def generate(prompt: str,
             context = clip(tokens)
         to_idle(clip) #very useful if you have a limited gpu and want to offload to cpu
 
-        if sampler_name in ["ddpm", "ddim"]:
+        if sampler_name in ["ddpm", "ddim", "euler", "dpm_solver"]:
             sampler = Sampler(generator)
             sampler.set_inference_timesteps(n_inference_steps)
         else:
@@ -134,6 +134,10 @@ def generate(prompt: str,
                 latents = sampler.ddpm_step(timestep, latents, model_output)
             elif sampler_name == "ddim":
                 latents = sampler.ddim_step(timestep, latents, model_output, eta=eta)
+            elif sampler_name == "euler":
+                latents = sampler.euler_ancestral_step(timestep, latents, model_output, eta=eta)
+            elif sampler_name == "euler":
+                latents = sampler.euler_ancestral_step(timestep, latents, model_output, eta=eta)
             else:
                 raise ValueError(f"Unknown sampler name {sampler_name}")
         

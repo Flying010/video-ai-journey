@@ -178,8 +178,6 @@ class Sampler:
         return x_prev
 
 
-
-
     def add_noise(self, original_samples: torch.FloatTensor, timesteps: torch.IntTensor) -> torch.FloatTensor:
         #at what time we want to add the timestep
         alpha_cumprod = self.alphas_cumprod.to(device=original_samples.device, dtype=original_samples.dtype)
