@@ -132,43 +132,50 @@ class Sampler:
 
         return x_drift
     
-    def dpm_solver_pp_2m_step(x_t: torch.Tensor, t: float, t_prev: float, model_output_t: torch.Tensor,
-                                model_output_prev: torch.Tensor,
-                                alpha_t: float,
-                                alpha_prev: float,
-                                sigma_t: float,
-                                sigma_prev: float, ):
-            """
-            One DPM-Solver++(2M) step.
+    def dpm_solver_pp_2m_step(self, timestep: int, latents: torch.Tensor, model_output: torch.Tensor):
+        """
+        One DPM-Solver++(2M) step with DDIM-style signature.
 
-            Args:
-                x_t:          Current latent (x_t).
-                t:            Current timestep (continuous).
-                t_prev:       Previous timestep.
-                model_output_t:     Model output (ε_theta) at time t.
-                model_output_prev:  Model output (ε_theta) at previous time t_prev.
-                alpha_t:      Alpha (mean scale) at timestep t.
-                alpha_prev:   Alpha (mean scale) at timestep t_prev.
-                sigma_t:      Sigma (noise std) at timestep t.
-                sigma_prev:   Sigma (noise std) at timestep t_prev.
+        Args:
+            timestep:       Current timestep index t.
+            latents:        Latents at current timestep x_t.
+            model_output:   Model prediction ε_θ(x_t, t).
 
-            Returns:
-                x_{t_prev}: Estimated latent at timestep t_prev.
-            """
+        Returns:
+            x_{t-1}:        Estimated latent at previous timestep.
+        """
+        t = self.timesteps[timestep]
+        prev_t = self.timesteps[timestep + 1] if timestep + 1 < len(self.timesteps) else 0.0  # t_{prev}
 
-            # h is time difference
-            h = t_prev - t
+        h = prev_t - t  # Note: time goes backward
 
-            # Compute predicted x0 from current and previous timesteps
-            x0_t = (x_t - sigma_t * model_output_t) / alpha_t
-            x0_prev = (x_t - sigma_t * model_output_prev) / alpha_t
+        # Extract alpha and sigma for current and previous timesteps
+        alpha_t = self.alphas_cumprod[timestep] ** 0.5
+        alpha_prev = self.alphas_cumprod[timestep + 1] ** 0.5 if timestep + 1 < len(self.alphas_cumprod) else self.one
+        sigma_t = (1 - self.alphas_cumprod[timestep]) ** 0.5
+        sigma_prev = (1 - self.alphas_cumprod[timestep + 1]) ** 0.5 if timestep + 1 < len(self.alphas_cumprod) else self.zero
 
-            # Linear multistep extrapolation of x0 (2nd-order)
-            x0_hat = x0_t + 0.5 * h * (model_output_t - model_output_prev)
+        # Store previous model output if not already done
+        if not hasattr(self, "_prev_model_output"):
+            self._prev_model_output = model_output  # Just initialize on first call
 
-            # Now compute x_{t_prev}
-            x_prev = alpha_prev * x0_hat + sigma_prev * model_output_prev
-            return x_prev
+        model_output_t = model_output
+        model_output_prev = self._prev_model_output
+
+        # Compute x0_t and x0_prev estimates
+        x0_t = (latents - sigma_t * model_output_t) / alpha_t
+        x0_prev = (latents - sigma_t * model_output_prev) / alpha_t
+
+        # 2nd-order multistep estimate
+        x0_hat = x0_t + 0.5 * h * (model_output_t - model_output_prev)
+
+        # Estimate x_{t-1}
+        x_prev = alpha_prev * x0_hat + sigma_prev * model_output_prev
+
+        # Update previous model output for next step
+        self._prev_model_output = model_output
+
+        return x_prev
 
 
 
