@@ -136,8 +136,8 @@ def generate(prompt: str,
                 latents = sampler.ddim_step(timestep, latents, model_output, eta=eta)
             elif sampler_name == "euler":
                 latents = sampler.euler_ancestral_step(timestep, latents, model_output, eta=eta)
-            elif sampler_name == "euler":
-                latents = sampler.euler_ancestral_step(timestep, latents, model_output, eta=eta)
+            elif sampler_name == "dpm_solver":
+                latents = sampler.dpm_solver_pp_2m_step(timestep, latents, model_output)
             else:
                 raise ValueError(f"Unknown sampler name {sampler_name}")
         
