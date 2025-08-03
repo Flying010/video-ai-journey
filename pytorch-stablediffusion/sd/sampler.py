@@ -106,39 +106,31 @@ class Sampler:
         
         return prev_latent
     
-    def euler_ancestral_step(model, x_t, t, t_next, sigma_t, sigma_next, model_output, eta=1.0):
-        """
-        Performs one Euler ancestral step.
+    def euler_ancestral_step(self, timestep: int, latents: torch.Tensor, model_output: torch.Tensor, eta=1.0):
+        t = timestep
+        prev_t = self._get_previous_timestep(t)
         
-        Args:
-            model: The denoising model (not used here directly if output already computed).
-            x_t: Current noisy sample at timestep t.
-            t: Current timestep.
-            t_next: Next timestep (smaller).
-            sigma_t: Standard deviation at timestep t.
-            sigma_next: Standard deviation at timestep t_next.
-            model_output: The predicted noise (usually model(x_t, t)).
-            eta: Controls stochasticity. 0.0 = deterministic, 1.0 = fully stochastic.
+        # Convert alphas to sigmas (standard deviation of noise at each timestep)
+        alpha_t = self.alphas_cumprod[t]
+        alpha_prev = self.alphas_cumprod[prev_t] if prev_t >= 0 else torch.tensor(1.0, device=latents.device, dtype=latents.dtype)
 
-        Returns:
-            x_{t_next}: The denoised latent at timestep t_next.
-        """
-        # Predict x0 (denoised image)
-        x0_pred = x_t - sigma_t * model_output
+        sigma_t = torch.sqrt(1 - alpha_t)
+        sigma_prev = torch.sqrt(1 - alpha_prev)
+        
+        # Predict x_0
+        x0_pred = (latents - sigma_t * model_output) / torch.sqrt(alpha_t)
+        
+        # Euler drift step (toward next timestep)
+        dt = sigma_prev - sigma_t
+        x_drift = latents + dt * model_output
 
-        # Compute step size
-        dt = sigma_next - sigma_t
-
-        # Deterministic part
-        x_det = x_t + dt * model_output
-
-        # Stochastic part
+        # Stochastic noise addition
         if eta > 0.0:
-            noise = torch.randn_like(x_t)
-            sigma = (eta * (sigma_next**2 - sigma_t**2))**0.5
-            x_det += sigma * noise
+            noise = torch.randn_like(latents)
+            sigma = torch.sqrt(torch.clamp(eta * (sigma_prev**2 - sigma_t**2), min=1e-20))
+            x_drift += sigma * noise
 
-        return x_det
+        return x_drift
     
     def dpm_solver_pp_2m_step(x_t: torch.Tensor, t: float, t_prev: float, model_output_t: torch.Tensor,
                                 model_output_prev: torch.Tensor,
